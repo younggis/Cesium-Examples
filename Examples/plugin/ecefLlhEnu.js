@@ -166,7 +166,7 @@ mathTool.prototype.enu_to_ecef = function (a, p) {
     //仰角
     let elevation = p.elevation;
 
-    let zUp = elevation >= 0 ? distance * Math.sin(this.PI / 180 * elevation) : (-1) * distance * Math.sin(this.PI / 180 * Math.abs(elevation));
+    let zUp = elevation >= 0 ? distance * Math.sin(this.PI / 180 * elevation) : (-1) * distance * Math.sin(this.PI / 180 * Math, abs(elevation));
 
     let d = distance * Math.cos(this.PI / 180 * Math.abs(elevation));
     let xEast;
