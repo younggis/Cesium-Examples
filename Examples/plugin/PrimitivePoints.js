@@ -111,7 +111,7 @@ var PrimitivePoints = (
                 v_color =color;\
                 p = czm_modelViewProjectionRelativeToEye * p;\
                 gl_Position = p;\
-                gl_PointSize=8.0;\
+                gl_PointSize=4.0;\
             }\
             ";
         }

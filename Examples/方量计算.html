@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <title>方量计算</title>
+    <link href="../Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+    <script src="../Build/Cesium/Cesium.js"></script>
+    <script src="plugin/turf.min.js"></script>
+    <script src="plugin/PrimitivePoints.js"></script>
+    <script src="plugin/TerrainToolCopy.js"></script>
+    <style>
+        html,
+        body,
+        #cesiumContainer {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
+
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <script>
+        let osm = new Cesium.UrlTemplateImageryProvider({
+            url: "http://mt1.google.cn/vt/lyrs=s&hl=zh-CN&x={x}&y={y}&z={z}&s=Gali"
+        });
+
+        // let osm = Cesium.createOpenStreetMapImageryProvider({
+        //     url: 'https://a.tile.openstreetmap.org/'
+        // });
+        let terrain = new Cesium.CesiumTerrainProvider({
+            url: "../Source/Terrain/beijing/"
+        });
+        let viewer = new Cesium.Viewer('cesiumContainer', {
+            imageryProvider: osm,
+            terrainProvider: terrain,//地形数据源
+            contextOptions: {
+                webgl: {
+                    alpha: true
+                }
+            },
+            selectionIndicator: false,
+            animation: false,  //是否显示动画控件
+            baseLayerPicker: false, //是否显示图层选择控件
+            geocoder: false, //是否显示地名查找控件
+            timeline: false, //是否显示时间线控件
+            sceneModePicker: false, //是否显示投影方式控件
+            navigationHelpButton: false, //是否显示帮助信息控件
+            infoBox: false,  //是否显示点击要素之后显示的信息
+            fullscreenButton: false,
+            shouldAnimate: true //动画播放
+        });
+
+        //取消双击事件
+        viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+        //设置homebutton的位置
+        Cesium.Camera.DEFAULT_VIEW_RECTANGLE =
+            Cesium.Rectangle.fromDegrees(116.15, 40.54, 116.25, 40.56);//Rectangle(west, south, east, north)
+        //设置初始位置
+        viewer.camera.setView({
+            destination: Cesium.Cartesian3.fromDegrees(115.970076, 39.910064, 3000)
+        });
+
+        //开启深度检测
+        //viewer.scene.globe.depthTestAgainstTerrain = true;
+
+        let coordinates = [[[115.94282, 39.918712], [115.970076, 39.910064], [115.954399, 39.882855], [115.905748, 39.886989], [115.913215, 39.916541], [115.913217, 39.916543], [115.913225, 39.916551], [115.94282, 39.918712]]];
+
+        // let tdpolygon = new Cesium.PolygonGeometry({
+        //     vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
+        //     polygonHierarchy: new Cesium.PolygonHierarchy(
+        //         Cesium.Cartesian3.fromDegreesArray([
+        //             115.94282, 39.918712,
+        //             115.970076, 39.910064,
+        //             115.954399, 39.882855,
+        //             115.905748, 39.886989,
+        //             115.913215, 39.916541,
+        //             115.913217, 39.916543,
+        //             115.913225, 39.916551
+        //         ])
+        //     ),
+        //     extrudedHeight: 0
+        // });
+        // let polygoninstance = new Cesium.GeometryInstance({
+        //     geometry: tdpolygon,
+        //     attributes: {
+        //         color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.fromRandom({ alpha: 1 }))
+        //     }
+        // });
+        // viewer.scene.primitives.add(new Cesium.Primitive({
+        //     geometryInstances: [polygoninstance],
+        //     appearance: new Cesium.PolylineColorAppearance({
+        //         translucent: false
+        //     })
+        // }));
+
+
+        let polygon = turf.polygon(coordinates);
+
+        let area = turf.area(polygon);
+
+        let cellsize = Math.sqrt(turf.area(polygon) / 10000);
+
+        let enveloped = turf.envelope(polygon);
+
+        let centroid = turf.centroid(polygon);
+
+        let bbox = turf.bbox(enveloped);
+
+        let grid = turf.pointGrid(bbox, cellsize, { units: 'meters' });
+
+        let ptsWithin = turf.pointsWithinPolygon(grid, polygon);
+
+        let lonlats = [];
+
+        let features = ptsWithin.features;
+        for (let i = 0; i < features.length; i++) {
+            lonlats.push({
+                lon: features[i].geometry.coordinates[0],
+                lat: features[i].geometry.coordinates[1]
+            })
+        }
+        setTimeout(() => {
+            TerrainToolCopy.LonlatPointsTerrainData(terrain, lonlats, (positions) => {
+                getVolumn(positions);
+            })
+
+        }, 5000);
+        function getVolumn(data) {
+            let minHeight = findMinHeight(data);
+            let maxHeight = findMaxHeight(data);
+            let volumn = 0;
+            let points = [];
+            let colors = [];
+
+            for (let i = 0; i < data.length; i++) {
+                volumn += (data[i]['height'] - minHeight) * cellsize * cellsize;
+                let point = Cesium.Cartesian3.fromRadians(data[i].longitude, data[i].latitude, data[i].height);
+                points.push(point);
+                colors.push(0);
+                colors.push(0);
+                colors.push(1);
+                colors.push(1);
+            }
+            new PrimitivePoints({ 'viewer': viewer, 'Cartesians': points, 'Colors': colors });
+
+            viewer.entities.add({
+                name: "飞机",
+                position: Cesium.Cartesian3.fromDegrees(centroid.geometry.coordinates[0], centroid.geometry.coordinates[1], maxHeight),
+                label: {
+                    text: volumn + '立方米',
+                    font: '24px sans-serif',
+                    fillColor: Cesium.Color.WHITE,
+                    style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                    horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+                    pixelOffset: new Cesium.Cartesian2(0.0, -70)
+                }
+            });
+        }
+
+        function findMinHeight(e) {
+            let minHeight = 5000000;
+            let minPoint = null;
+            for (let i = 0; i < e.length; i++) {
+                let height = e[i]['height'];
+                if (height < minHeight) {
+                    minHeight = height;
+                }
+            }
+            return minHeight;
+        }
+        function findMaxHeight(e) {
+            let maxHeight = 0;
+            let minPoint = null;
+            for (let i = 0; i < e.length; i++) {
+                let height = e[i]['height'];
+                if (height > maxHeight) {
+                    maxHeight = height;
+                }
+            }
+            return maxHeight;
+        }
+    </script>
+</body>
+
+</html>
