@@ -110,11 +110,13 @@
                                                       {\n\
                                                            czm_material material = czm_getDefaultMaterial(materialInput);\n\
                                                            vec2 st = materialInput.st;\n\
-                                                           vec4 colorImage = texture2D(image, vec2(fract(st.s - time), st.t));\n\
+                                                           vec4 colorImage = texture2D(image, vec2(fract(st.s), st.t));\n\
                                                            material.alpha = colorImage.a * color.a;\n\
                                                            material.diffuse = (colorImage.rgb+color.rgb)/2.0;\n\
                                                            return material;\n\
                                                        }";
+
+                                                       //vec4 colorImage = texture2D(image, vec2(fract(st.s - time), st.t));\n\
         Cesium.Material._materialCache.addMaterial(Cesium.Material.PolylineTrailLinkType, {
             fabric: {
                 type: Cesium.Material.PolylineTrailLinkType,
@@ -136,7 +138,7 @@
                 positions: Cesium.Cartesian3.fromDegreesArrayHeights([104, 30, 1000,
                     114, 30, 100000,
                     114, 50, 1000000]),
-                width: 15,
+                width: 5,
                 material: new Cesium.PolylineTrailLinkMaterialProperty(Cesium.Color.ORANGE, 3000)
             }
         });
