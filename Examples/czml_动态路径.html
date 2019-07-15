@@ -6,7 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport"
         content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
-    <title>CZML动态路径</title>
+    <title>czml_动态路径</title>
     <link href="../Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
     <script src="../Build/Cesium/Cesium.js"></script>
     <style>
@@ -20,25 +20,14 @@
             overflow: hidden;
         }
 
-        #canvas-a {
-            top: 10px;
-            display: none;
-        }
-
-        #canvas-b {
-            top: 120px;
-            display: none;
-        }
+        
     </style>
 
 </head>
 
 <body>
     <div id="cesiumContainer"></div>
-    <video id="trailer" style="display: none;" autoplay="" loop crossorigin controls>
-        <source src="../Source/Video/电站预制舱.mp4" type="video/mp4">
-        Your browser does not support the <code>video</code> element.
-    </video>
+    
     <script>
         let osm = Cesium.createOpenStreetMapImageryProvider({
             url: 'https://a.tile.openstreetmap.org/'

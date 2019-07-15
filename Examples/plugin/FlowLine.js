@@ -51,14 +51,14 @@
                                                        vec2 st = materialInput.st;\n\
                                                        vec4 colorImage = texture2D(image, vec2(fract(st.s), st.t));\n\
                                                        material.alpha = colorImage.a * color.a;\n\
-                                                       material.diffuse = (colorImage.rgb+color.rgb)/2.0;\n\
+                                                       material.diffuse = colorImage.rgb;\n\
                                                        return material;\n\
                                                    }";
     Cesium.Material._materialCache.addMaterial(Cesium.Material.FlowLineType, {
         fabric: {
             type: Cesium.Material.FlowLineType,
             uniforms: {
-                color: new Cesium.Color(1.0, 0.0, 0.0, 1),
+                color: new Cesium.Color(1.0, 1.0, 1.0, 1),
                 image: Cesium.Material.FlowLineImage,
                 time: 0
             },
@@ -73,7 +73,6 @@
         let canvas = document.createElement('canvas');
         canvas.width = 1200;
         canvas.height = 50;
-        document.getElementsByTagName('body')[0].appendChild(canvas);
         let ctx = canvas.getContext('2d');
         let grd = ctx.createLinearGradient(0, 0, 1200, 0);
         grd.addColorStop(0, "rgba(255,255,0,0.2)");
