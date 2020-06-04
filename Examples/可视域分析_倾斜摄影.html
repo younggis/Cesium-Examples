@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+    <title>可视域分析_倾斜摄影</title>
+    <link href="../Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+    <script src="../Build/Cesium/Cesium.js"></script>
+    <script src="plugin/sensor.js"></script>
+    <script src="plugin/getCurrentMousePosition.js"></script>
+    <script src="plugin/ViewShed3D.js"></script>
+    <style>
+        html,
+        body,
+        #cesiumContainer {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #menu {
+            position: absolute;
+            top: 80px;
+            left: 10px;
+            z-index: 999;
+        }
+    </style>
+
+</head>
+
+<body>
+    <div id="cesiumContainer"></div>
+    <div id="menu">
+        <p>
+            <button onclick="setvisible('add')">添加</button>
+        </p>
+        <p>
+            <button onclick="setvisible('clear')">清除</button>
+        </p>
+    </div>
+    <script id="fragment-shader" type="notjs">
+uniform float czzj;
+uniform float dis;
+uniform float spzj;
+uniform vec3 visibleColor;
+uniform vec3 disVisibleColor;
+uniform float mixNum;
+uniform sampler2D colorTexture;
+uniform sampler2D stcshadow; 
+uniform sampler2D depthTexture;
+uniform mat4 _shadowMap_matrix; 
+uniform vec4 shadowMap_lightPositionEC; 
+uniform vec4 shadowMap_lightDirectionEC;
+uniform vec3 shadowMap_lightUp;
+uniform vec3 shadowMap_lightDir;
+uniform vec3 shadowMap_lightRight;
+uniform vec4 shadowMap_normalOffsetScaleDistanceMaxDistanceAndDarkness; 
+uniform vec4 shadowMap_texelSizeDepthBiasAndNormalShadingSmooth; 
+varying vec2 v_textureCoordinates;
+vec4 toEye(in vec2 uv, in float depth){
+    vec2 xy = vec2((uv.x * 2.0 - 1.0),(uv.y * 2.0 - 1.0));
+    vec4 posInCamera =czm_inverseProjection * vec4(xy, depth, 1.0);
+    posInCamera =posInCamera / posInCamera.w;
+    return posInCamera;
+}
+float getDepth(in vec4 depth){
+    float z_window = czm_unpackDepth(depth);
+    z_window = czm_reverseLogDepth(z_window);
+    float n_range = czm_depthRange.near;
+    float f_range = czm_depthRange.far;
+    return (2.0 * z_window - n_range - f_range) / (f_range - n_range);
+}
+float _czm_sampleShadowMap(sampler2D shadowMap, vec2 uv){
+    return texture2D(shadowMap, uv).r;
+}
+float _czm_shadowDepthCompare(sampler2D shadowMap, vec2 uv, float depth){
+    return step(depth, _czm_sampleShadowMap(shadowMap, uv));
+}
+float _czm_shadowVisibility(sampler2D shadowMap, czm_shadowParameters shadowParameters){
+    float depthBias = shadowParameters.depthBias;
+    float depth = shadowParameters.depth;
+    float nDotL = shadowParameters.nDotL;
+    float normalShadingSmooth = shadowParameters.normalShadingSmooth;
+    float darkness = shadowParameters.darkness;
+    vec2 uv = shadowParameters.texCoords;
+    depth -= depthBias;
+    vec2 texelStepSize = shadowParameters.texelStepSize;
+    float radius = 1.0;
+    float dx0 = -texelStepSize.x * radius;
+    float dy0 = -texelStepSize.y * radius;
+    float dx1 = texelStepSize.x * radius;
+    float dy1 = texelStepSize.y * radius;
+    float visibility = 
+    (
+    _czm_shadowDepthCompare(shadowMap, uv, depth)
+    +_czm_shadowDepthCompare(shadowMap, uv + vec2(dx0, dy0), depth) +
+    _czm_shadowDepthCompare(shadowMap, uv + vec2(0.0, dy0), depth) +
+    _czm_shadowDepthCompare(shadowMap, uv + vec2(dx1, dy0), depth) +
+    _czm_shadowDepthCompare(shadowMap, uv + vec2(dx0, 0.0), depth) +
+    _czm_shadowDepthCompare(shadowMap, uv + vec2(dx1, 0.0), depth) +
+    _czm_shadowDepthCompare(shadowMap, uv + vec2(dx0, dy1), depth) +
+    _czm_shadowDepthCompare(shadowMap, uv + vec2(0.0, dy1), depth) +
+    _czm_shadowDepthCompare(shadowMap, uv + vec2(dx1, dy1), depth)
+    ) * (1.0 / 9.0)
+    ;
+    return visibility;
+}
+vec3 pointProjectOnPlane(in vec3 planeNormal, in vec3 planeOrigin, in vec3 point){
+    vec3 v01 = point -planeOrigin;
+    float d = dot(planeNormal, v01) ;
+    return (point - planeNormal * d);
+}
+float ptm(vec3 pt){
+    return sqrt(pt.x*pt.x + pt.y*pt.y + pt.z*pt.z);
+}
+void main() 
+{ 
+    const float PI = 3.141592653589793;
+    vec4 color = texture2D(colorTexture, v_textureCoordinates);
+    vec4 currD = texture2D(depthTexture, v_textureCoordinates);
+    if(currD.r>=1.0){
+        gl_FragColor = color;
+        return;
+    }
+    
+    float depth = getDepth(currD);
+    vec4 positionEC = toEye(v_textureCoordinates, depth);
+    vec3 normalEC = vec3(1.0);
+    czm_shadowParameters shadowParameters; 
+    shadowParameters.texelStepSize = shadowMap_texelSizeDepthBiasAndNormalShadingSmooth.xy; 
+    shadowParameters.depthBias = shadowMap_texelSizeDepthBiasAndNormalShadingSmooth.z; 
+    shadowParameters.normalShadingSmooth = shadowMap_texelSizeDepthBiasAndNormalShadingSmooth.w; 
+    shadowParameters.darkness = shadowMap_normalOffsetScaleDistanceMaxDistanceAndDarkness.w; 
+    shadowParameters.depthBias *= max(depth * 0.01, 1.0); 
+    vec3 directionEC = normalize(positionEC.xyz - shadowMap_lightPositionEC.xyz); 
+    float nDotL = clamp(dot(normalEC, -directionEC), 0.0, 1.0); 
+    vec4 shadowPosition = _shadowMap_matrix * positionEC; 
+    shadowPosition /= shadowPosition.w; 
+    if (any(lessThan(shadowPosition.xyz, vec3(0.0))) || any(greaterThan(shadowPosition.xyz, vec3(1.0)))) 
+    { 
+        gl_FragColor = color;
+        return;
+    }
+
+    //坐标与视点位置距离，大于最大距离则舍弃阴影效果
+    vec4 lw = czm_inverseView*  vec4(shadowMap_lightPositionEC.xyz, 1.0);
+    vec4 vw = czm_inverseView* vec4(positionEC.xyz, 1.0);
+    if(distance(lw.xyz,vw.xyz)>dis){
+        gl_FragColor = color;
+        return;
+    }
+
+
+    //水平夹角限制
+    vec3 ptOnSP = pointProjectOnPlane(shadowMap_lightUp,lw.xyz,vw.xyz);
+    directionEC = ptOnSP - lw.xyz;
+    float directionECMO = ptm(directionEC.xyz);
+    float shadowMap_lightDirMO = ptm(shadowMap_lightDir.xyz);
+    float cosJJ = dot(directionEC,shadowMap_lightDir)/(directionECMO*shadowMap_lightDirMO);
+    float degJJ = acos(cosJJ)*(180.0 / PI);
+    degJJ = abs(degJJ);
+    if(degJJ>spzj/2.0){
+        gl_FragColor = color;
+        return;
+    }
+
+    //垂直夹角限制
+    vec3 ptOnCZ = pointProjectOnPlane(shadowMap_lightRight,lw.xyz,vw.xyz);
+    vec3 dirOnCZ = ptOnCZ - lw.xyz;
+    float dirOnCZMO = ptm(dirOnCZ);
+    float cosJJCZ = dot(dirOnCZ,shadowMap_lightDir)/(dirOnCZMO*shadowMap_lightDirMO);
+    float degJJCZ = acos(cosJJCZ)*(180.0 / PI);
+    degJJCZ = abs(degJJCZ);
+    if(degJJCZ>czzj/2.0){
+        gl_FragColor = color;
+        return;
+    }
+
+    shadowParameters.texCoords = shadowPosition.xy; 
+    shadowParameters.depth = shadowPosition.z; 
+    shadowParameters.nDotL = nDotL; 
+    float visibility = _czm_shadowVisibility(stcshadow, shadowParameters); 
+    if(visibility==1.0){
+        gl_FragColor = mix(color,vec4(visibleColor,1.0),mixNum);
+    }else{
+        if(abs(shadowPosition.z-0.0)<0.01){
+            return;
+        }
+        gl_FragColor = mix(color,vec4(disVisibleColor,1.0),mixNum);
+    }
+}
+    </script>
+    <script>
+        let osm = new Cesium.UrlTemplateImageryProvider({
+            url: "http://mt1.google.cn/vt/lyrs=s&hl=zh-CN&x={x}&y={y}&z={z}&s=Gali"
+        });
+
+        let viewer = new Cesium.Viewer('cesiumContainer', {
+            imageryProvider: osm,
+            terrainProvider: Cesium.createWorldTerrain(),
+            contextOptions: {
+                webgl: {
+                    alpha: true
+                }
+            },
+            selectionIndicator: false,
+            animation: false, //是否显示动画控件
+            baseLayerPicker: false, //是否显示图层选择控件
+            geocoder: false, //是否显示地名查找控件
+            timeline: false, //是否显示时间线控件
+            sceneModePicker: false, //是否显示投影方式控件
+            navigationHelpButton: false, //是否显示帮助信息控件
+            infoBox: false, //是否显示点击要素之后显示的信息
+            fullscreenButton: false,
+            shouldAnimate: true //动画播放
+        });
+
+        //取消双击事件
+        //viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+        //设置homebutton的位置
+        Cesium.Camera.DEFAULT_VIEW_RECTANGLE =
+            Cesium.Rectangle.fromDegrees(116.15, 40.54, 116.25, 40.56); //Rectangle(west, south, east, north)
+        //设置初始位置
+        viewer.camera.setView({
+            destination: Cesium.Cartesian3.fromDegrees(116.20, 40.55, 3000000)
+        });
+
+        //开启深度检测
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+
+        let tileset = viewer.scene.primitives.add(new Cesium.Cesium3DTileset({
+            url: 'http://data.marsgis.cn/3dtiles/qx-shequ/tileset.json' // '../Source/3DTiles/building/tileset.json'
+        }));
+
+        tileset.readyPromise.then(function (tileset) {
+            viewer.scene.primitives.add(tileset);
+            viewer.zoomTo(tileset, new Cesium.HeadingPitchRange(0.5, -0.2, tileset.boundingSphere.radius * 1.0));
+        }).otherwise(function (error) {
+            console.log(error);
+        });
+
+
+        var arrViewField = [];
+        var viewModel = { verticalAngle: 90, horizontalAngle: 120, distance: 10 };
+        function addViewField() {
+            var e = new Cesium.ViewShed3D(viewer, {
+                horizontalAngle: Number(viewModel.horizontalAngle),
+                verticalAngle: Number(viewModel.verticalAngle),
+                distance: Number(viewModel.distance),
+                calback: function () {
+                    viewModel.distance = e.distance
+                }
+            });
+            arrViewField.push(e)
+        }
+
+        function clearAllViewField() {
+            for (var e = 0, i = arrViewField.length; e < i; e++)
+                arrViewField[e].destroy();
+            arrViewField = []
+        }
+
+
+        function setvisible(value) {
+            switch (value) {
+                case 'add':
+                    addViewField();
+                    break;
+                case 'clear':
+                    clearAllViewField();
+                    break;
+            }
+        }
+    </script>
+</body>
+
+</html>
