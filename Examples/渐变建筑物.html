@@ -118,8 +118,8 @@
 
             let values = elevationRamp;
             let grd = isVertical ? ctx.createLinearGradient(0, 0, 0, 100) : ctx.createLinearGradient(0, 0, 100, 0);
-            grd.addColorStop(values[0], 'rgba(255,255,255,1)'); //black
-            grd.addColorStop(values[1], 'rgba(0,0,0,1)'); //white
+            grd.addColorStop(values[0], 'rgba(255,255,255,0.5)'); //black
+            grd.addColorStop(values[1], 'rgba(0,0,0,0.5)'); //white
 
             ctx.globalAlpha = 0.3;
             ctx.fillStyle = grd;
